@@ -31,7 +31,7 @@ $ pip install torch==1.7.1+cu110 torchvision==0.8.2+cu110 torchaudio===0.7.2 -f 
 
 <br>
 
-- Install bagfiles from [here](https://drive.google.com/file/d/1wmsllgCpF-djAhiN5Hgz4Bs-bqeZQPYe/view?usp=sharing)
+- Install bagfiles from [here](https://drive.google.com/file/d/1wmsllgCpF-djAhiN5Hgz4Bs-bqeZQPYe/view?usp=sharing) and [here](https://drive.google.com/file/d/1FzOU2kbddMhqZ1drE-abUewXbCTNIq7-/view?usp=sharing)
   - Put a bagfile to  `Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/scripts`
 
 
