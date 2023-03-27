@@ -5,7 +5,7 @@ OEDR model for camera SOTIF process
 <br>
 
 # Quick Start
-## 1. Set up execution environment
+## 1. Set up environment
 - Prerequestions
   - ubuntu 18.04 ROS melodic
   - cuda = 11.0
