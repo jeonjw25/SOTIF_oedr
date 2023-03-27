@@ -60,6 +60,10 @@ $ docker run -it --name your container name \
 -e DISPLAY=$DISPLAY \
 --gpus all jeonjw25/sotif_oedr:v1
 ```
+- appy package setup 
+```
+$ source ~/catkin_ws/devel/setup.bash
+```
 - Execute launch file
 ```
 $ roslaunch yolov5_ros oedr.launch
