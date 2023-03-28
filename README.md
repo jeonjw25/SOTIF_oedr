@@ -4,7 +4,7 @@ OEDR model for camera SOTIF process
 
 <br>
 
-# Quick Start
+# Quick Start(Local)
 
 - Prerequestions
   - ubuntu 18.04 ROS melodic
@@ -12,6 +12,9 @@ OEDR model for camera SOTIF process
   - RTX 30xx Ti
   
   <br>
+- Git clone this repo to ROS melodic catkin_ws/src/
+
+<br>
 
 - Install yolov5 dependencies
   - move to `Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/yolov5`
@@ -49,21 +52,52 @@ $ roslaunch yolov5_ros oedr.launch
 
 <br>
 
-# Docker 
+# Docker
 
-- pull Image and make container 
+- Link docker to local xhost
 ```
-$ docker run -it --name your container name \
--v your workspace path://root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros \
+xhost +local:docker
+```
+
+<br>
+
+- Install cuda container toolkit and add user to the docker group.
+```sh
+$ distribution=$(. /etc/os-release;echo $ID$VERSION_ID) \
+   && curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add - \
+   && curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+
+$ sudo apt-get update
+$ sudo apt-get install -y nvidia-docker2
+
+# Add your user to the docker group.
+$ sudo usermod -aG docker $USER
+$ sudo systemctl restart docker
+```
+- Restart or relogin
+
+<br>
+
+- Pull Image and make container 
+```sh
+$ docker run -it --name your_container_name \
+-v your_workspace_path:/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros \
 -v /tmp/.X11-unix:/tmp/.X11-unix \
 --net host \
 -e DISPLAY=$DISPLAY \
 --gpus all jeonjw25/sotif_oedr:v1
 ```
-- appy package setup 
-```
+
+<br>
+
+## in docker CLI
+
+- Appy package setup 
+```sh
 $ source ~/catkin_ws/devel/setup.bash
 ```
+<br>
+
 - Execute launch file
 ```
 $ roslaunch yolov5_ros oedr.launch
