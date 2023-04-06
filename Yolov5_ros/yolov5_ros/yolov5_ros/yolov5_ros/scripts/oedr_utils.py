@@ -1,12 +1,6 @@
 import cv2
 import numpy as np
 
-def draw_lines(img, lines):
-    #print("draw_lines funcion")
-    for line in lines:
-        for x1, y1, x2, y2 in line:
-            cv2.line(img, (x1, y1), (x2, y2), [0, 0, 255], 2)
-
 def warp(img, src, dst):
     img_size = (img.shape[1], img.shape[0]) # w h
     M = cv2.getPerspectiveTransform(src, dst)
@@ -66,13 +60,14 @@ def slide_window_search(binary_warped, left_current, right_current):
 
     margin = 80
     minpix = 50
-
+    min_pix_percentage = 30 
     left_lane = []
     right_lane = []
-
+    l_window_cnt = 0
+    r_window_cnt = 0
     color = [0, 255, 0]
     thickness = 2
-
+    lane_quality = 2
     for w in range(nwindows):
         win_y_low = binary_warped.shape[0] - (w+1) * window_height # top of window
         win_y_high = binary_warped.shape[0] - w * window_height # bottom of window
@@ -87,8 +82,6 @@ def slide_window_search(binary_warped, left_current, right_current):
         else:
             win_xright_high = binary_warped.shape[1]
 
-        # cv2.rectangle(out_img, (win_xleft_low, win_y_low), (win_xleft_high, win_y_high), color, thickness)
-        # cv2.rectangle(out_img, (win_xright_low, win_y_low), (win_xright_high, win_y_high), color, thickness)
         good_left = ((nonzero_y >=win_y_low) & (nonzero_y < win_y_high) & (nonzero_x >= win_xleft_low) & (nonzero_x < win_xleft_high)).nonzero()[0]
         good_right = ((nonzero_y >=win_y_low) & (nonzero_y < win_y_high) & (nonzero_x >= win_xright_low) & (nonzero_x < win_xright_high)).nonzero()[0]
         
@@ -96,14 +89,43 @@ def slide_window_search(binary_warped, left_current, right_current):
         left_lane.append(good_left)
         right_lane.append(good_right)
         
-        # cv2.imshow("oo" ,out_img)
 
         if len(good_left) > minpix:
+            # print(len(good_left))
             left_current = np.int(1.02 * np.mean(nonzero_x[good_left]))
+            l_window_cnt += 1
+            white_percentage = int((len(good_left) / (window_height * margin * 2)) * 100)
+
+            if white_percentage > min_pix_percentage:
+                line_quality = 1
+
             cv2.rectangle(out_img, (win_xleft_low, win_y_low), (win_xleft_high, win_y_high), color, thickness)
+            text_x = (win_xleft_low + win_xleft_high) // 2
+            text_y = (win_y_low + win_y_high) // 2
+            text = str(white_percentage) + "%"
+            cv2.putText(out_img, text,
+                            (int(text_x-10), int(text_y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
         if len(good_right) > minpix:
             right_current = np.int(1.02 * np.mean(nonzero_x[good_right]))
+            r_window_cnt += 1
             cv2.rectangle(out_img, (win_xright_low, win_y_low), (win_xright_high, win_y_high), color, thickness)
+            white_percentage = int((len(good_right) / (window_height * margin * 2)) * 100)
+
+            if white_percentage > min_pix_percentage:
+                line_quality = 1
+
+            text_x = (win_xright_low + win_xright_high) // 2
+            text_y = (win_y_low + win_y_high) // 2
+            text = str(white_percentage) + "%"
+            cv2.putText(out_img, text,
+                            (int(text_x-10), int(text_y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
+
+        # Estimate lane quality
+        if win_xleft_high > win_xright_low:
+            lane_quality = 0
+    
+    if l_window_cnt <= 2 or r_window_cnt <= 2:
+        lane_quality = 1
 
     left_lane = np.concatenate(left_lane)
     right_lane = np.concatenate(right_lane)
@@ -115,18 +137,26 @@ def slide_window_search(binary_warped, left_current, right_current):
     m_leftx, m_lefty, m_rightx, m_righty = convert_pixel2meter(binary_warped, leftx, lefty, rightx, righty)
 
     if len(m_leftx) == 0 and len(m_rightx) > 0: # turning left
-        
+        lane_quality = 1
         right_fit = np.polyfit(m_righty, m_rightx, 3)
         left_fit = right_fit
-        print("left turning!")
+        left_fit[-1] = 0 - left_fit[-1]
+        # print("left turning!")
     elif len(m_leftx) > 0 and len(m_rightx) == 0: # turning right
+        lane_quality = 1
         left_fit = np.polyfit(m_lefty, m_leftx, 3)
         right_fit = left_fit
-        print("right turning!")
+        right_fit[-1] = 0 - right_fit[-1]
+        # print("right turning!")
+    elif len(m_leftx) == 0 and len(m_rightx) == 0:
+        lane_quality = 0
+        print("No lane detected!")
     else:
         right_fit = np.polyfit(m_righty, m_rightx, 3)
         left_fit = np.polyfit(m_lefty, m_leftx, 3)
-    return out_img, left_fit, right_fit
+    text = "lane quality: " + str(lane_quality)
+    cv2.putText(out_img, text, (int(50), int(50)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2, cv2.LINE_AA)
+    return out_img, left_fit, right_fit, lane_quality
 
 def convert_pixel2meter(img, leftx, lefty, rightx, righty):
     ym_per_pix = 12.3 / img.shape[0]
@@ -158,8 +188,8 @@ def calculate_curvature(image, boxes):
     region_of_interest_vertices = np.array([[(0, height), (0, height-100), (width / 4, height / 2), (3*width / 4, height / 2), (width, height-100), (width, height)]], dtype='uint32')
     # src = np.float32([[530, height], [1030, 620], [1150, 620], [1650, height]])
     # dst = np.float32([[80, 800], [260, 0], [650, 0], [750, 800]])
-    src = np.float32([[0, height], [750, 700], [1200, 700], [width, height]])
-    dst = np.float32([[250, 750], [320, 50], [850, 50], [850, 750]])
+    src = np.float32([[150, height], [750, 700], [1200, 700], [width-150, height]])
+    dst = np.float32([[100, 750], [170, 50], [750, 50], [750, 750]])
 
     warped = warp(bgr_blur_img, src, dst) # birdeye view transform
     w_f_img = color_filter(warped) # filter yellow & white
@@ -167,7 +197,7 @@ def calculate_curvature(image, boxes):
     canny_img = cv2.Canny(warped, 70, 210)
 
     leftbase, rightbase = plothistogram(masked_w_f_img)
-    out_img, left_fit, right_fit = slide_window_search(masked_w_f_img, leftbase, rightbase)
+    out_img, left_fit, right_fit , lane_quality = slide_window_search(masked_w_f_img, leftbase, rightbase)
 
     lp = np.poly1d(left_fit)
     rp = np.poly1d(right_fit)
@@ -175,64 +205,8 @@ def calculate_curvature(image, boxes):
     # print("left_curvation: {}" .format(left_fit))
     # print("right_curvation: {}" .format(right_fit))
 
-    return out_img, lp, rp
-
-    # 관심영역 외부의 부분을 모두 검은색으로 만들기
-    # mask = np.zeros_like(gray_img)
-    # cv2.fillPoly(mask, np.array([region_of_interest_vertices], np.int32), 255)
-    # masked_image = cv2.bitwise_and(canny_img, mask)
-
-    # crop vehicle area
-    # crop_img = crop(masked_image, boxes)
-
-    # line detection
-    # cv2.HoughLinesP(masked_image, rho, theta, threshold, np.array([]), minLineLength=min_line_len, maxLineGap=max_line_gap)
-    # lines = cv2.HoughLinesP(canny_img, 1, np.pi/180, 30, np.array([]), minLineLength=5, maxLineGap=25)
-
-    # slope filter
-    # line_arr = np.squeeze(lines)
-    # slope_degree = (np.arctan2(line_arr[:,1] - line_arr[:,3], line_arr[:,0] - line_arr[:,2]) * 180) / np.pi
-    # line_arr = line_arr[np.abs(slope_degree)<170]
-    # slope_degree = slope_degree[np.abs(slope_degree)<170]
-    # line_arr = line_arr[np.abs(slope_degree)>95]
-    # slope_degree = slope_degree[np.abs(slope_degree)>95]
-    # L_lines, R_lines = line_arr[(slope_degree>0),:], line_arr[(slope_degree<0),:]
-    # L_lines, R_lines = L_lines[:,None], R_lines[:,None]
+    return out_img, lp, rp, lane_quality
     
-    # left_x = []
-    # left_y = []
-    # right_x = []
-    # right_y = []
-    # for i in np.squeeze(L_lines):
-    #     # print("L_points: {}" .format(i))
-    #     left_x.append(i[0])
-    #     left_y.append(i[1])
-
-    # for j in np.squeeze(R_lines):
-    #     # print("L_points: {}" .format(i))
-    #     right_x.append(j[0])
-    #     right_y.append(j[1])
-    
-    # left_fit = np.polyfit(left_y, left_x, 3)
-    # right_fit = np.polyfit(right_y, right_x, 3)
-    
-
-    # draw_lines(warped, R_lines)
-    # draw_lines(warped, L_lines)
-    
-    # # 차량과 차선의 거리 계산
-    # lane_width = right_point - left_point
-    # car_position = mid_point
-    # lane_center_position = (left_point + right_point) / 2
-    # distance_from_center = (car_position - lane_center_position) * 3.7 / lane_width
-    
-    # # 곡률 계산
-    # y_eval = height
-    # left_curvature = ((1 + (2 * left_fit[0] * y_eval + left_fit[1])**2)**1.5) / np.absolute(2 * left_fit[0])
-    # right_curvature = ((1 + (2 * right_fit[0] * y_eval + right_fit[1])**2)**1.5) / np.absolute(2 * right_fit[0])
-
-    
-
 def crop(org_img, boxes):
     img = org_img.copy()
     # print(img.shape)
@@ -246,4 +220,8 @@ def crop(org_img, boxes):
 
     return img
 
-    
+
+def track(l_box, r_box):
+    dist = 0
+    print("track")
+    return dist

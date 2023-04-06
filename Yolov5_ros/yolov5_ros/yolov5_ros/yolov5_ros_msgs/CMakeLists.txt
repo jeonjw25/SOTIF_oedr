@@ -5,6 +5,7 @@ project(yolov5_ros_msgs)
 find_package(catkin REQUIRED COMPONENTS
   std_msgs
   message_generation
+  sensor_msgs
 )
 
 add_message_files(
