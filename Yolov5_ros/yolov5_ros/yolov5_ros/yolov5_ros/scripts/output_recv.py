@@ -31,9 +31,9 @@ class Output_Recv:
         self.sub_r_image = rospy.Subscriber(r_image_topic, Image, self.right_img_callback,
                                             queue_size=1, buff_size=52428800)                                    
         
-        cv2.setUseOptimized(True)
-        cv2.setNumThreads(4)
-        cv2.ocl.setUseOpenCL(True)
+        # cv2.setUseOptimized(True)
+        # cv2.setNumThreads(4)
+        # cv2.ocl.setUseOpenCL(True)
         self.bboxes = None
         self.l_img = None
         self.r_img = None
@@ -51,7 +51,7 @@ class Output_Recv:
         # self.r_img = cv2.cvtColor(self.r_img, cv2.COLOR_BGR2RGB)
         
         distance = self.cal_distance()
-        print(cv2.cuda.getCudaEnabledDeviceCount())
+        # print(cv2.cuda.getCudaEnabledDeviceCount())
         print(distance)
         
 
@@ -70,17 +70,27 @@ class Output_Recv:
                 y_min = box.ymin
                 y_max = box.ymax
 
-                stereo = cv2.StereoBM_create(numDisparities=256, blockSize=19)
-                disparity = stereo.compute(r_img,l_img)
+                stereo = cv2.cuda.createStereoBM(numDisparities=256, blockSize=9)
+                left_cuda = cv2.cuda_GpuMat(l_img)
+                right_cuda = cv2.cuda_GpuMat(r_img)
+                stream = cv2.cuda_Stream()
+
+                disparity_cuda = stereo.compute(right_cuda,left_cuda, stream=stream)
+                disparity = disparity_cuda.download()
+                focal_length = 2065
+                baseline = 1
+                depth_map = baseline * focal_length / disparity
                 cv2.imshow('depth map', disparity)
                 cv2.waitKey(3)
                 nDisparity = np.array(disparity)+17
                 nDisparity = 29184/(nDisparity*2)
                 x_left = max(0,x_min-(x_max-x_min))
                 x_right = min(width, x_max+(x_max-x_min))
-                distance = np.round(np.amin(nDisparity[y_min:y_max, x_min:x_max]), 2)
+                depth_map = np.array(depth_map)
+                distance = np.round(np.amin(depth_map[y_min:y_max, x_min:x_max]), 2)
+                # distance = np.round(np.amin(nDisparity[y_min:y_max, x_min:x_max]), 2)
                 cv2.putText(self.r_img, str(distance)+'m',
-                            (x_min+5, y_min-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+                            (int((x_max + x_min) / 2), y_min-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
                 distances.append(distance)
         
         cv2.imshow('add depth', self.r_img)
