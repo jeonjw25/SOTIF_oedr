@@ -68,6 +68,7 @@ def slide_window_search(binary_warped, left_current, right_current):
     color = [0, 255, 0]
     thickness = 2
     lane_quality = 2
+    
     for w in range(nwindows):
         win_y_low = binary_warped.shape[0] - (w+1) * window_height # top of window
         win_y_high = binary_warped.shape[0] - w * window_height # bottom of window
@@ -97,7 +98,7 @@ def slide_window_search(binary_warped, left_current, right_current):
             white_percentage = int((len(good_left) / (window_height * margin * 2)) * 100)
 
             if white_percentage > min_pix_percentage:
-                line_quality = 1
+                lane_quality = 1
 
             cv2.rectangle(out_img, (win_xleft_low, win_y_low), (win_xleft_high, win_y_high), color, thickness)
             text_x = (win_xleft_low + win_xleft_high) // 2
@@ -112,7 +113,7 @@ def slide_window_search(binary_warped, left_current, right_current):
             white_percentage = int((len(good_right) / (window_height * margin * 2)) * 100)
 
             if white_percentage > min_pix_percentage:
-                line_quality = 1
+                lane_quality = 1
 
             text_x = (win_xright_low + win_xright_high) // 2
             text_y = (win_y_low + win_y_high) // 2
@@ -123,7 +124,8 @@ def slide_window_search(binary_warped, left_current, right_current):
         # Estimate lane quality
         if win_xleft_high > win_xright_low:
             lane_quality = 0
-    
+
+        
     if l_window_cnt <= 2 or r_window_cnt <= 2:
         lane_quality = 1
 

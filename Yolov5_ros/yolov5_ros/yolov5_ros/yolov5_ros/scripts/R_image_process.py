@@ -161,11 +161,11 @@ class Yolo_Dect:
         self.position_pub.publish(self.boundingBoxes)
         cv2.circle(img, (750, 700), 20, (0, 0, 255), -1)
         cv2.circle(img, (1200, 700), 20, (0, 0, 255), -1)
-        global cnt
-        cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/R_dect'+str(cnt)+'.png', img)
-        cnt += 1
-        self.publish_image(img, height, width)
-        cv2.imshow('YOLOv5_R', img)
+        # global cnt
+        # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/R_dect'+str(cnt)+'.png', img)
+        # cnt += 1
+        self.publish_image(org_img, height, width)
+        #cv2.imshow('YOLOv5_R', img)
 
 
     def publish_image(self, imgdata, height, width):
@@ -203,3 +203,4 @@ if __name__ == "__main__":
 #     print("connection complete!!!!!!")
     
 #     data = client.recv(64)
+

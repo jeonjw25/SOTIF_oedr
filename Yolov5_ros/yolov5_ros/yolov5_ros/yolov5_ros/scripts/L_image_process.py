@@ -72,6 +72,7 @@ class Yolo_Dect:
         self.boundingBoxes.image_header = image.header
         self.getImageStatus = True
         self.color_image = np.frombuffer(image.data, dtype=np.uint8).reshape(image.height, image.width, -1)
+        # self.color_image = np.array(image.data, dtype=np.uint8).reshape(image.height, image.width, -1)
         self.color_image = cv2.cvtColor(self.color_image, cv2.COLOR_BGR2RGB)
         # self.boundingBoxes.image.data = sum(self.color_image, dim=0)
         #print(self.color_image)
@@ -80,7 +81,7 @@ class Yolo_Dect:
         # xmin    ymin    xmax   ymax  confidence  class    name
         boxs = results.pandas().xyxy[0].values
         bev, lp, rp, lane_quality = calculate_curvature(self.color_image, boxs)
-        # cv2.imshow('bev', bev)
+        cv2.imshow('bev', bev)
         
         
         self.boundingBoxes.l_lane_curvation = np.round(np.float32(lp), 4)
@@ -88,8 +89,9 @@ class Yolo_Dect:
         self.boundingBoxes.lane_quality = np.int32(lane_quality)
 
         global cnt
-        cnt += 1
+        
         cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/laneDect'+str(cnt)+'.png', bev)
+        cnt += 1
         self.dectshow(self.color_image, boxs, image.height, image.width)
 
         cv2.waitKey(3)
@@ -116,7 +118,7 @@ class Yolo_Dect:
 
         # red_area = cv2.bitwise_and(cropped_img, cropped_img, mask=mask_red)
         # yellow_area = cv2.bitwise_and(cropped_img, cropped_img, mask=mask_yellow)
-        # green_area = cv2.bitwise_and(cropped_img, cropped_img, mask=mask_green)
+        green_area = cv2.bitwise_and(cropped_img, cropped_img, mask=mask_green)
         # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/mask_green'+'.png', green_area)
         
         max_area = max(cv2.countNonZero(mask_red), cv2.countNonZero(mask_yellow), cv2.countNonZero(mask_green))
@@ -166,10 +168,10 @@ class Yolo_Dect:
         
         self.position_pub.publish(self.boundingBoxes)
 
-        self.publish_image(img, height, width)
+        self.publish_image(org_img, height, width)
         
-        # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/media/laneDect'+str(cnt)+'.png', img)
-        # cv2.imshow('YOLOv5_L', img)
+        # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/media/R_img'+str(cnt)+'.png', img)
+        cv2.imshow('YOLOv5_L', img)
 
     
    
@@ -208,3 +210,4 @@ if __name__ == "__main__":
 #     print("connection complete!!!!!!")
     
 #     data = client.recv(64)
+
