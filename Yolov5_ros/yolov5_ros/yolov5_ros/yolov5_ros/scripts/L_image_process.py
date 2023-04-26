@@ -80,24 +80,41 @@ class Img_processor:
         # self.boundingBoxes.image.data = sum(self.color_image, dim=0)
         #print(self.color_image)
         # cv2.imshow('YOLOv5_L', img)
-       
+        
+        # object detection
+        
         results = self.model(self.color_image)
         # xmin    ymin    xmax   ymax  confidence  class    name
-        boxs = results.pandas().xyxy[0].values
-
-        bev, lp, rp, lane_quality = calculate_curvature(self.color_image, boxs)
-        cv2.imshow('bev', bev)
-        global cnt
-        cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/onlylane_ '+str(cnt)+'.png', bev)
-        cnt += 1
-    
         
+        boxes = results.pandas().xyxy[0].values
+        cls_list = ['truck', 'car', 'traffic light', 'stop sign', 'person', 'bus', 'person']
+        track_boxes = []
+        post_boxes = []
+        
+        for box in boxes:
+            if box[-1] in cls_list:
+                post_boxes.append(box)
+                track_boxes.append(([int(box[0]), int(box[1]), int(box[2]-box[0]), int(box[3]-box[1])], box[4], box[-1]))
+
+        post_boxes = np.array(post_boxes)
+        # print(post_boxes)
+
+        # tracking
+        self.tracker = DeepSort(max_age=3, embedder_gpu=True)
+        tracks = self.tracker.update_tracks(track_boxes, frame=self.color_image)
+
+        # lane detection
+        bev, lp, rp, lane_quality = calculate_curvature(self.color_image, post_boxes)
         self.boundingBoxes.l_lane_curvation = np.round(np.float32(lp), 4)
         self.boundingBoxes.r_lane_curvation = np.round(np.float32(rp), 4)
         self.boundingBoxes.lane_quality = np.int32(lane_quality)
 
+        # cv2.imshow('bev', bev)
+        # global cnt
+        # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/onlylane_ '+str(cnt)+'.png', bev)
+        # cnt += 1
         
-        self.dectshow(self.color_image, boxs, image.height, image.width)
+        self.dectshow(self.color_image, post_boxes, image.height, image.width, tracks)
 
         cv2.waitKey(3)
 
@@ -136,58 +153,65 @@ class Img_processor:
         
         return box.Class
 
-    def dectshow(self, org_img, boxs, height, width):
+    def dectshow(self, org_img, boxs, height, width, tracks):
         img = org_img.copy()
         
-        cls_list = ['truck', 'car', 'traffic light', 'stop sign', 'bus', 'person']
-        for box in boxs:
+        # print(tracks)
+        for box, track in zip(boxs, tracks):
+            # if not track.is_confirmed():
+            #     continue
+            
             boundingBox = BoundingBox()
-            if box[-1] in cls_list:
-                boundingBox.probability =np.float64(box[4])
-                boundingBox.xmin = np.int64(box[0])
-                boundingBox.ymin = np.int64(box[1])
-                boundingBox.xmax = np.int64(box[2])
-                boundingBox.ymax = np.int64(box[3])
-                boundingBox.Class = box[-1]
+            boundingBox.probability =np.float64(box[4])
+            boundingBox.xmin = np.int64(box[0])
+            boundingBox.ymin = np.int64(box[1])
+            boundingBox.xmax = np.int64(box[2])
+            boundingBox.ymax = np.int64(box[3])
+            boundingBox.Class = box[-1]
+            
+            # classify traffic light 
+            if boundingBox.Class == 'traffic light':
+                boundingBox.Class = self.classify_traffic_light(img, boundingBox)
+            if box[-1] in self.classes_colors.keys():
+                color = self.classes_colors[box[-1]]
+            else:
+                color = np.random.randint(0, 183, 3)
+                self.classes_colors[box[-1]] = color
+
+            cv2.rectangle(img, (int(box[0]), int(box[1])),
+                        (int(box[2]), int(box[3])), (int(color[0]),int(color[1]), int(color[2])), 2)
+
+            if box[1] < 20:
+                text_pos_y = box[1] + 30
+            else:
+                text_pos_y = box[1] - 10
                 
-                # classify traffic light 
-                if boundingBox.Class == 'traffic light':
-                    boundingBox.Class = self.classify_traffic_light(img, boundingBox)
-                if box[-1] in self.classes_colors.keys():
-                    color = self.classes_colors[box[-1]]
-                else:
-                    color = np.random.randint(0, 183, 3)
-                    self.classes_colors[box[-1]] = color
+            # cv2.putText(img, boundingBox.Class,
+            #             (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+            
+            self.boundingBoxes.bounding_boxes.append(boundingBox)
 
-                cv2.rectangle(img, (int(box[0]), int(box[1])),
-                            (int(box[2]), int(box[3])), (int(color[0]),int(color[1]), int(color[2])), 2)
-
-                if box[1] < 20:
-                    text_pos_y = box[1] + 30
-                else:
-                    text_pos_y = box[1] - 10
-                    
-                cv2.putText(img, boundingBox.Class,
-                            (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
-                self.boundingBoxes.bounding_boxes.append(boundingBox)
-
-                # distance estimate
-                if boundingBox.Class in ['car', 'truck', 'bus', 'person']:
-                    dist_calculator = calRelativeVal(img=img, bbox = box)
-                    x, y, z = dist_calculator.calculate_3d_coord()
-                    print("x: {}, y: {}".format(round(x/z, 2), round(y/z, 2)))
-                    # cv2.putText(img, str(round(x/z, 2))+'m',
-                    #             (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+            # distance estimate
+            if boundingBox.Class in ['car', 'truck', 'bus', 'person']:
+                track_id = track.track_id
+                
+                cv2.putText(img, track_id,
+                        (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
+                dist_calculator = calRelativeVal(img=img, bbox = box)
+                x, y, z = dist_calculator.calculate_3d_coord()
+                # print("x: {}, y: {}".format(round(x/z, 2), round(y/z, 2)))
+                # cv2.putText(img, str(round(x/z, 2))+'m',
+                #             (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
         self.position_pub.publish(self.boundingBoxes)
 
         self.publish_image(org_img, height, width)
         
-        # cv2.imshow('YOLOv5_L', img)
-        # global cnt
-        # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/L_img'+str(cnt)+'.png', img)
-        # cnt += 1
+        cv2.imshow('YOLOv5_L', img)
+        global cnt
+        cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/L_img'+str(cnt)+'.png', img)
+        cnt += 1
     
-
+        cv2.waitKey(3)
 
     def publish_image(self, imgdata, height, width):
         image_temp = Image()
