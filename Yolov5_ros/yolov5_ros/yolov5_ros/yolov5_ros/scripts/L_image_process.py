@@ -14,7 +14,7 @@ from yolov5_ros_msgs.msg import BoundingBox, BoundingBoxes
 import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from oedr_utils import calculate_curvature, crop
-
+from homography import calRelativeVal
 global cnt
 cnt = 0
 
@@ -76,22 +76,23 @@ class Yolo_Dect:
         self.color_image = cv2.cvtColor(self.color_image, cv2.COLOR_BGR2RGB)
         # self.boundingBoxes.image.data = sum(self.color_image, dim=0)
         #print(self.color_image)
-        
+        # cv2.imshow('YOLOv5_L', img)
+        # global cnt
+        # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/lane_img_raw'+str(cnt)+'.png', self.color_image)
+        # cnt += 1
+    
         results = self.model(self.color_image)
         # xmin    ymin    xmax   ymax  confidence  class    name
         boxs = results.pandas().xyxy[0].values
         bev, lp, rp, lane_quality = calculate_curvature(self.color_image, boxs)
-        cv2.imshow('bev', bev)
+        # cv2.imshow('bev', bev)
         
         
         self.boundingBoxes.l_lane_curvation = np.round(np.float32(lp), 4)
         self.boundingBoxes.r_lane_curvation = np.round(np.float32(rp), 4)
         self.boundingBoxes.lane_quality = np.int32(lane_quality)
 
-        global cnt
         
-        cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/laneDect'+str(cnt)+'.png', bev)
-        cnt += 1
         self.dectshow(self.color_image, boxs, image.height, image.width)
 
         cv2.waitKey(3)
@@ -162,19 +163,28 @@ class Yolo_Dect:
                 else:
                     text_pos_y = box[1] - 10
                     
-                cv2.putText(img, boundingBox.Class,
-                            (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+                # cv2.putText(img, boundingBox.Class,
+                #             (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
                 self.boundingBoxes.bounding_boxes.append(boundingBox)
-        
+
+                # distance estimate
+                if boundingBox.Class in ['car', 'truck', 'bus', 'person']:
+                    dist_calculator = calRelativeVal(img=img, bbox = box)
+                    x, y, z = dist_calculator.calculate_3d_coord()
+                    print("x: {}, y: {}".format(round(x/z, 2), round(y/z, 2)))
+                    cv2.putText(img, str(round(x/z, 2))+'m',
+                                (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
         self.position_pub.publish(self.boundingBoxes)
 
         self.publish_image(org_img, height, width)
         
         # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/media/R_img'+str(cnt)+'.png', img)
-        cv2.imshow('YOLOv5_L', img)
-
+        # cv2.imshow('YOLOv5_L', img)
+        global cnt
+        cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/L_img'+str(cnt)+'.png', img)
+        cnt += 1
     
-   
+
 
     def publish_image(self, imgdata, height, width):
         image_temp = Image()
