@@ -85,7 +85,7 @@ $ docker run -it --name your_container_name \
 -v /tmp/.X11-unix:/tmp/.X11-unix \
 --net host \
 -e DISPLAY=$DISPLAY \
---gpus all jeonjw25/sotif_oedr:v1
+--gpus all jeonjw25/cuda11.2_cudnn8_ubuntu18.04_ros:v1
 ```
 
 <br>

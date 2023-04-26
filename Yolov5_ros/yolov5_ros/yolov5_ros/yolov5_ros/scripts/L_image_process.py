@@ -15,10 +15,12 @@ import sys, os
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from oedr_utils import calculate_curvature, crop
 from homography import calRelativeVal
+from deep_sort_realtime.deepsort_tracker import DeepSort
+
 global cnt
 cnt = 0
 
-class Yolo_Dect:
+class Img_processor:
     def __init__(self):
 
         # load parameters
@@ -35,6 +37,7 @@ class Yolo_Dect:
         self.model = torch.hub.load(yolov5_path, 'custom',
                                     path=weight_path, source='local')
 
+        
         # which device will be used
         if (rospy.get_param('/use_cpu', 'false')):
             self.model.cpu()
@@ -77,16 +80,17 @@ class Yolo_Dect:
         # self.boundingBoxes.image.data = sum(self.color_image, dim=0)
         #print(self.color_image)
         # cv2.imshow('YOLOv5_L', img)
-        # global cnt
-        # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/lane_img_raw'+str(cnt)+'.png', self.color_image)
-        # cnt += 1
-    
+       
         results = self.model(self.color_image)
         # xmin    ymin    xmax   ymax  confidence  class    name
         boxs = results.pandas().xyxy[0].values
+
         bev, lp, rp, lane_quality = calculate_curvature(self.color_image, boxs)
-        # cv2.imshow('bev', bev)
-        
+        cv2.imshow('bev', bev)
+        global cnt
+        cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/onlylane_ '+str(cnt)+'.png', bev)
+        cnt += 1
+    
         
         self.boundingBoxes.l_lane_curvation = np.round(np.float32(lp), 4)
         self.boundingBoxes.r_lane_curvation = np.round(np.float32(rp), 4)
@@ -163,8 +167,8 @@ class Yolo_Dect:
                 else:
                     text_pos_y = box[1] - 10
                     
-                # cv2.putText(img, boundingBox.Class,
-                #             (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+                cv2.putText(img, boundingBox.Class,
+                            (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
                 self.boundingBoxes.bounding_boxes.append(boundingBox)
 
                 # distance estimate
@@ -172,17 +176,16 @@ class Yolo_Dect:
                     dist_calculator = calRelativeVal(img=img, bbox = box)
                     x, y, z = dist_calculator.calculate_3d_coord()
                     print("x: {}, y: {}".format(round(x/z, 2), round(y/z, 2)))
-                    cv2.putText(img, str(round(x/z, 2))+'m',
-                                (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+                    # cv2.putText(img, str(round(x/z, 2))+'m',
+                    #             (int(box[0]), int(text_pos_y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
         self.position_pub.publish(self.boundingBoxes)
 
         self.publish_image(org_img, height, width)
         
-        # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/media/R_img'+str(cnt)+'.png', img)
         # cv2.imshow('YOLOv5_L', img)
-        global cnt
-        cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/L_img'+str(cnt)+'.png', img)
-        cnt += 1
+        # global cnt
+        # cv2.imwrite('/root/catkin_ws/src/Yolov5_ros/yolov5_ros/yolov5_ros/yolov5_ros/media/L_img'+str(cnt)+'.png', img)
+        # cnt += 1
     
 
 
@@ -201,7 +204,7 @@ class Yolo_Dect:
 
 def main():
     rospy.init_node('L_img_node', anonymous=True)
-    yolo_dect = Yolo_Dect()
+    img_processor = Img_processor()
     rospy.spin()
 
 
@@ -220,4 +223,3 @@ if __name__ == "__main__":
 #     print("connection complete!!!!!!")
     
 #     data = client.recv(64)
-

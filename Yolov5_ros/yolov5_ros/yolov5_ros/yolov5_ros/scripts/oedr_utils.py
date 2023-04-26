@@ -3,8 +3,12 @@ import numpy as np
 
 def warp(img, src, dst):
     img_size = (img.shape[1], img.shape[0]) # w h
+    x_r = img_size[0]/1920        # 1920: bag파일 이미지 크기 가로
+    y_r = img_size[1]/1080
+    x = 1000*x_r
+    y = 800*y_r
     M = cv2.getPerspectiveTransform(src, dst)
-    warped = cv2.warpPerspective(img, M, (1000,800), flags=cv2.INTER_LINEAR)
+    warped = cv2.warpPerspective(img, M, (int(x),int(y)), flags=cv2.INTER_LINEAR)
     
     return warped
 
@@ -28,7 +32,9 @@ def color_filter(img):
 def roi(img):
     x = int(img.shape[1])
     y = int(img.shape[0])
-    _shape = np.array([[0, y-1], [0, 10], [int(0.3*x), 10], [int(0.3*x), int(0.3*y)], [int(0.7*x), int(0.3*y)], [int(0.7*x), 10], [x, 10], [x, y-1]]) 
+    x_r = x/1000        
+    y_r = y/800
+    _shape = np.array([[0, y-1], [0, 10*y_r], [int(0.3*x), 10*y_r], [int(0.3*x), int(0.3*y)], [int(0.7*x), int(0.3*y)], [int(0.7*x), 10*y_r], [x, 10*y_r], [x, y-1]]) 
 
     mask = np.zeros_like(img)
 
@@ -52,21 +58,28 @@ def plothistogram(img):
 
 def slide_window_search(binary_warped, left_current, right_current):
     out_img = np.dstack((binary_warped, binary_warped, binary_warped))
-    nwindows = 15
-    window_height = np.int(binary_warped.shape[0] / nwindows)
+    height,width = binary_warped.shape
+    x_r = width/1000
+    y_r = height/800
+    avg_r = (x_r + y_r)/2
+    nwindows = int(15 *max(0.5,y_r))   # 15개로 고정 할 것인가, 이미지 크기에 따라 비율을 맞출 것인가
+    window_height = np.int(height / nwindows)
     nonzero = binary_warped.nonzero()
     nonzero_y = np.array(nonzero[0])
     nonzero_x = np.array(nonzero[1])
+    
+    min_pix_percentage = 30
+    margin = int(80*avg_r)
+    minpix = int(50*avg_r)
 
-    margin = 80
-    minpix = 50
-    min_pix_percentage = 30 
     left_lane = []
     right_lane = []
-    l_window_cnt = 0
-    r_window_cnt = 0
+
     color = [0, 255, 0]
     thickness = 2
+
+    l_window_cnt = 0
+    r_window_cnt = 0
     lane_quality = 2
     
     for w in range(nwindows):
@@ -181,22 +194,27 @@ def calculate_curvature(image, boxes):
     # 이미지 크기 가져오기
     height, width = gray_img.shape[:2]
 
+    # 이미지 크기 가져오기
+    height, width = gray_img.shape[:2]
+    x_r = width/1920        # 1920: bag파일 이미지 크기 가로
+    y_r = height/1080       # 1080: bag파일 이미지 크기 세로
+
     blur_img = cv2.GaussianBlur(gray_img, (3, 3), 0)
     bgr_blur_img = cv2.GaussianBlur(bgr_img, (3, 3), 0)
 
-    # canny_img = cv2.Canny(blur_img, 70, 210)
+    
     
     # 관심영역(ROI) 생성
-    region_of_interest_vertices = np.array([[(0, height), (0, height-100), (width / 4, height / 2), (3*width / 4, height / 2), (width, height-100), (width, height)]], dtype='uint32')
-    # src = np.float32([[530, height], [1030, 620], [1150, 620], [1650, height]])
-    # dst = np.float32([[80, 800], [260, 0], [650, 0], [750, 800]])
-    src = np.float32([[150, height], [750, 700], [1200, 700], [width-150, height]])
-    dst = np.float32([[100, 750], [170, 50], [750, 50], [750, 750]])
+    region_of_interest_vertices = np.array([[(0, height), (0, height-100), (width, height-100), (width, height)]], dtype='uint32')
+
+    src = np.float32([[150*x_r, height], [750*x_r, 700*y_r], [1200*x_r, 700*y_r], [width-(150*x_r), height]])
+    dst = np.float32([[100*x_r, 750*y_r], [170*x_r, 50*y_r], [750*x_r, 50*y_r], [750*x_r, 750*y_r]])
 
     warped = warp(bgr_blur_img, src, dst) # birdeye view transform
     w_f_img = color_filter(warped) # filter yellow & white
     masked_w_f_img = roi(w_f_img) # filter middle area of lane
-    canny_img = cv2.Canny(warped, 70, 210)
+
+    # canny_img = cv2.Canny(warped, 70, 210)
 
     leftbase, rightbase = plothistogram(masked_w_f_img)
     out_img, left_fit, right_fit , lane_quality = slide_window_search(masked_w_f_img, leftbase, rightbase)
